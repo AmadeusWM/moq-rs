@@ -23,7 +23,8 @@ impl Producer {
 
 		let objects_per_group = 1000;
 		let payload_stuffing: Bytes = "XXXXXXXX".repeat(100).bytes().collect();
-		let delay = Duration::from_millis(10);
+		let object_delay = Duration::from_millis(1);
+		let group_delay = Duration::from_millis(20000);
 
 		let mut object_id = 0;
 		let mut group_id = 0;
@@ -34,6 +35,7 @@ impl Producer {
 				object_id = 0;
 				println!("producing group {}", group_id);
 				print_header();
+				sleep(group_delay).await;
 			}
 
 			let writer = objects_writer.create(Object {
@@ -49,7 +51,7 @@ impl Producer {
 				}
 			});
 
-			sleep(delay).await;
+			sleep(object_delay).await;
 
 			object_id += 1;
 			priority += 1;
