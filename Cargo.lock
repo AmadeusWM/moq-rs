@@ -889,7 +889,6 @@ dependencies = [
  "env_logger",
  "log",
  "moq-transport",
- "quictransport-quinn",
  "quinn",
  "rustls",
  "rustls-native-certs",
@@ -898,8 +897,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "webtransport-generic",
- "webtransport-quinn",
+ "web-transport",
+ "web-transport-quinn",
 ]
 
 [[package]]

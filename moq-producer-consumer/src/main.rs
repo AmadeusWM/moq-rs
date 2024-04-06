@@ -59,13 +59,13 @@ async fn main() -> anyhow::Result<()> {
 
 	match config.url.scheme() {
 		"https" => {
-			tls_config.alpn_protocols = vec![webtransport_quinn::ALPN.to_vec()]; // this one is important
+			tls_config.alpn_protocols = vec![web_transport_quinn::ALPN.to_vec()]; // this one is important
 			let client_config = quinn::ClientConfig::new(Arc::new(tls_config));
 
 			let mut endpoint = quinn::Endpoint::client(config.bind)?;
 			endpoint.set_default_client_config(client_config);
 
-			let session = webtransport_quinn::connect(&endpoint, &config.url)
+			let session = web_transport_quinn::connect(&endpoint, &config.url)
 				.await
 				.context("failed to create WebTransport session")?;
 
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
 			let mut endpoint = quinn::Endpoint::client(config.bind)?;
 			endpoint.set_default_client_config(client_config);
 
-			let session = quictransport_quinn::connect(&endpoint, &config.url)
+			let session = web_transport_quinn::connect(&endpoint, &config.url)
 				.await
 				.context("failed to create QUIC Transport session")?;
 
@@ -88,9 +88,9 @@ async fn main() -> anyhow::Result<()> {
 	}
 }
 
-async fn run<S: webtransport_generic::Session>(session: S, config: cli::Config) -> anyhow::Result<()> {
+async fn run(session: web_transport_quinn::Session, config: cli::Config) -> anyhow::Result<()> {
 	if config.publish {
-		let (session, mut publisher) = moq_transport::Publisher::connect(session)
+		let (session, mut publisher) = moq_transport::Publisher::connect(session.into())
 			.await
 			.context("failed to create MoQ Transport session")?;
 
@@ -108,7 +108,7 @@ async fn run<S: webtransport_generic::Session>(session: S, config: cli::Config) 
 			res = publisher.serve(broadcast_sub) => res.context("failed to serve broadcast")?,
 		}
 	} else {
-		let (session, mut subscriber) = moq_transport::Subscriber::connect(session)
+		let (session, mut subscriber) = moq_transport::Subscriber::connect(session.into())
 			.await
 			.context("failed to create MoQ Transport session")?;
 

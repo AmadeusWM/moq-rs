@@ -28,7 +28,7 @@ impl Producer {
 
 		let mut object_id = 0;
 		let mut group_id = 0;
-		let mut priority = 0;
+		let mut priority = 10000;
 		loop {
 			if object_id >= objects_per_group {
 				group_id += 1;
@@ -54,7 +54,7 @@ impl Producer {
 			sleep(object_delay).await;
 
 			object_id += 1;
-			priority += 1;
+			priority -= 1;
 		}
 	}
 
