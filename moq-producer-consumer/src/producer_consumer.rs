@@ -22,13 +22,14 @@ impl Producer {
 		let mut objects_writer = self.track.objects()?;
 
 		let objects_per_group = 1000;
-		let payload_stuffing: Bytes = "XXXXXXXX".repeat(100).bytes().collect();
+		let payload: Bytes = "X".repeat(800).bytes().collect();
 		let object_delay = Duration::from_millis(1);
 		let group_delay = Duration::from_millis(20000);
 
 		let mut object_id = 0;
 		let mut group_id = 0;
-		let mut priority = 10000;
+		let mut priority = 0;
+
 		loop {
 			if object_id >= objects_per_group {
 				group_id += 1;
@@ -44,7 +45,7 @@ impl Producer {
 				priority,
 			})?;
 
-			let payload = payload_stuffing.clone();
+			let payload = payload.clone();
 			tokio::spawn(async move {
 				if let Err(err) = Self::send_object(writer, payload).await {
 					log::warn!("Failed sending object: {}", err);
@@ -54,7 +55,7 @@ impl Producer {
 			sleep(object_delay).await;
 
 			object_id += 1;
-			priority -= 1;
+			priority += 1;
 		}
 	}
 
