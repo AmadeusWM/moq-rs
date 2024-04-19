@@ -164,12 +164,12 @@ impl Session {
 	pub async fn run(self) -> Result<(), SessionError> {
 		let mut tasks = FuturesUnordered::new();
 
-		tasks.push(Self::run_recv(self.recver, self.publisher, self.subscriber.clone()).boxed_local());
-		tasks.push(Self::run_send(self.sender, self.outgoing).boxed_local());
+		tasks.push(Self::run_recv(self.recver, self.publisher, self.subscriber.clone()).boxed());
+		tasks.push(Self::run_send(self.sender, self.outgoing).boxed());
 
 		if let Some(subscriber) = self.subscriber {
-			tasks.push(Self::run_streams(self.webtransport.clone(), subscriber.clone()).boxed_local());
-			tasks.push(Self::run_datagrams(self.webtransport, subscriber).boxed_local());
+			tasks.push(Self::run_streams(self.webtransport.clone(), subscriber.clone()).boxed());
+			tasks.push(Self::run_datagrams(self.webtransport, subscriber).boxed());
 		}
 
 		let res = tasks.select_next_some().await;
