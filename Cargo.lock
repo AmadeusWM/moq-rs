@@ -879,6 +879,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "moq-producer-consumer"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "clap_mangen",
+ "env_logger",
+ "log",
+ "moq-transport",
+ "quinn",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "web-transport-quinn",
+]
+
+[[package]]
 name = "moq-pub"
 version = "0.4.0"
 dependencies = [
@@ -2193,7 +2215,6 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf5eb5142259b46d473e44075bde93336f3ad6054d9909a93baca87dad5a03d4"
 dependencies = [
- "async-trait",
  "bytes",
  "futures",
  "http",
