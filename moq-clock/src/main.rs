@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
 		tokio::select! {
 			res = session.run() => res.context("session error")?,
 			res = clock.run() => res.context("clock error")?,
-			res = publisher.serve(broadcast_sub) => res.context("failed to serve broadcast")?,
+			res = publisher.serve(broadcast_sub, None) => res.context("failed to serve broadcast")?,
 		}
 	} else {
 		let (session, mut subscriber) = moq_transport::Subscriber::connect(session.into())

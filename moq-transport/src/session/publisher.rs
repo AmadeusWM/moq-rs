@@ -63,7 +63,7 @@ impl Publisher {
 	}
 
 	// Helper function to announce and serve a list of tracks.
-	pub async fn serve(&mut self, broadcast: serve::BroadcastReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	pub async fn serve(&mut self, broadcast: serve::BroadcastReader, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		let mut announce = self.announce(&broadcast.namespace)?;
 
 		let mut tasks = FuturesUnordered::new();
@@ -101,7 +101,7 @@ impl Publisher {
 		}
 	}
 
-	pub async fn serve_subscribe(subscribe: Subscribed, track: Option<serve::TrackReader>, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	pub async fn serve_subscribe(subscribe: Subscribed, track: Option<serve::TrackReader>, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		match track {
 			Some(track) => subscribe.serve(track, sender).await?,
 			None => subscribe.close(ServeError::NotFound)?,

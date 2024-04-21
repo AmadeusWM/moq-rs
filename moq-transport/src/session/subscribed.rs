@@ -74,7 +74,7 @@ impl Subscribed {
 		(send, recv)
 	}
 
-	pub async fn serve(mut self, track: serve::TrackReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	pub async fn serve(mut self, track: serve::TrackReader, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		let res = self.serve_inner(track, sender).await;
 		if let Err(err) = &res {
 			self.close(err.clone().into())?;
@@ -83,7 +83,7 @@ impl Subscribed {
 		res
 	}
 
-	async fn serve_inner(&mut self, track: serve::TrackReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	async fn serve_inner(&mut self, track: serve::TrackReader, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		let latest = track.latest();
 		self.state.lock_mut().ok_or(ServeError::Cancel)?.max = latest;
 
@@ -213,7 +213,7 @@ impl Subscribed {
 		Ok(())
 	}
 
-	async fn serve_groups(&mut self, mut groups: serve::GroupsReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	async fn serve_groups(&mut self, mut groups: serve::GroupsReader, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		let mut tasks = FuturesUnordered::new();
 		let mut done: Option<Result<(), ServeError>> = None;
 
@@ -254,7 +254,7 @@ impl Subscribed {
 		mut group: serve::GroupReader,
 		mut publisher: Publisher,
 		state: State<SubscribedState>,
-		mut sender: mpsc::Sender::<StreamClosedEvent>
+		sender: Option<mpsc::Sender::<StreamClosedEvent>>
 	) -> Result<(), SessionError> {
 		let mut stream = publisher.open_uni().await?;
 
@@ -291,15 +291,17 @@ impl Subscribed {
 			log::trace!("sent group done");
 		}
 
-		// todo: stream.finish().await (or whatever)
-  		if let Err(err) = sender.send(StreamClosedEvent::Group((*group.info).clone())).await {
-			log::warn!("failed to send group_info: {}", err);
-  		}
+		if let Some(mut sender) = sender {
+			writer.finish().await?;
+	  		if let Err(err) = sender.send(StreamClosedEvent::Group((*group.info).clone())).await {
+				log::warn!("failed to send group_info: {}", err);
+	  		}
+		}
 
 		Ok(())
 	}
 
-	pub async fn serve_objects(&mut self, mut objects: serve::ObjectsReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
+	pub async fn serve_objects(&mut self, mut objects: serve::ObjectsReader, sender: Option<mpsc::Sender::<StreamClosedEvent>>) -> Result<(), SessionError> {
 		let mut tasks = FuturesUnordered::new();
 		let mut done = None;
 
@@ -341,7 +343,7 @@ impl Subscribed {
 		mut object: serve::ObjectReader,
 		mut publisher: Publisher,
 		state: State<SubscribedState>, 
-		mut sender: mpsc::Sender::<StreamClosedEvent>
+		sender: Option<mpsc::Sender::<StreamClosedEvent>>
 	) -> Result<(), SessionError> {
 		state
 			.lock_mut()
@@ -364,11 +366,13 @@ impl Subscribed {
 			writer.write(&chunk).await?;
 			log::trace!("sent object payload: {:?}", chunk.len());
 		}
-		
-		// uhmmm, I also have to implement finish??? a man
-  		if let Err(err) = sender.send(StreamClosedEvent::Object((*object.info).clone())).await {
-			log::warn!("failed to send group_info: {}", err);
-  		}
+
+		if let Some(mut sender) = sender {
+			writer.finish().await?;
+	  		if let Err(err) = sender.send(StreamClosedEvent::Object((*object.info).clone())).await {
+				log::warn!("failed to send group_info: {}", err);
+	  		}
+	  	}
 
 		log::trace!("sent object done");
 

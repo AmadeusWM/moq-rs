@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
 	tokio::select! {
 		res = session.run() => res.context("session error")?,
 		res = media.run() => res.context("media error")?,
-		res = publisher.serve(broadcast) => res.context("publisher error")?,
+		res = publisher.serve(broadcast, None) => res.context("publisher error")?,
 	}
 
 	Ok(())

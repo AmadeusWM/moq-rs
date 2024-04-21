@@ -113,7 +113,7 @@ impl Connection {
 			if let Some(track) = local.subscribe(&subscribe.name)? {
 				log::info!("serving from local: {:?}", track.info);
 				// NOTE: Depends on drop(track) being called afterwards
-				return Ok(subscribe.serve(track.reader).await?);
+				return Ok(subscribe.serve(track.reader, None).await?);
 			}
 		}
 
@@ -124,7 +124,7 @@ impl Connection {
 					log::info!("serving from remote: {:?} {:?}", remote.info, track.info);
 
 					// NOTE: Depends on drop(track) being called afterwards
-					return Ok(subscribe.serve(track.reader).await?);
+					return Ok(subscribe.serve(track.reader, None).await?);
 				}
 			}
 		}

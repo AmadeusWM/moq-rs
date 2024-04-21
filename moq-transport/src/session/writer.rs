@@ -4,6 +4,7 @@ use crate::coding::{Encode, EncodeError};
 
 use super::SessionError;
 use bytes::Buf;
+use web_transport::WriteError;
 
 pub struct Writer {
 	stream: web_transport::SendStream,
@@ -40,5 +41,9 @@ impl Writer {
 		}
 
 		Ok(())
+	}
+
+	pub async fn finish(&mut self) -> Result<(), WriteError> {
+		self.stream.finish().await
 	}
 }
