@@ -3,7 +3,7 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{channel::mpsc, stream::FuturesUnordered, StreamExt};
 
 use crate::{
 	message::{self, Message},
@@ -12,7 +12,7 @@ use crate::{
 	util::Queue,
 };
 
-use super::{Announce, AnnounceRecv, Session, SessionError, Subscribed, SubscribedRecv};
+use super::{Announce, AnnounceRecv, Session, SessionError, StreamClosedEvent, Subscribed, SubscribedRecv};
 
 // TODO remove Clone.
 #[derive(Clone)]
@@ -63,7 +63,7 @@ impl Publisher {
 	}
 
 	// Helper function to announce and serve a list of tracks.
-	pub async fn serve(&mut self, broadcast: serve::BroadcastReader) -> Result<(), SessionError> {
+	pub async fn serve(&mut self, broadcast: serve::BroadcastReader, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
 		let mut announce = self.announce(&broadcast.namespace)?;
 
 		let mut tasks = FuturesUnordered::new();
@@ -71,6 +71,7 @@ impl Publisher {
 		let mut done = None;
 
 		loop {
+			let sender = sender.clone();
 			tokio::select! {
 				subscribe = announce.subscribed(), if done.is_none() => {
 					let subscribe = match subscribe {
@@ -85,7 +86,7 @@ impl Publisher {
 						let info = subscribe.info.clone();
 
 						match broadcast.get_track(&subscribe.name) {
-							Ok(track) => if let Err(err) = Self::serve_subscribe(subscribe, track).await {
+							Ok(track) => if let Err(err) = Self::serve_subscribe(subscribe, track, sender).await {
 								log::warn!("failed serving subscribe: {:?}, error: {}", info, err)
 							},
 							Err(err) => {
@@ -100,9 +101,9 @@ impl Publisher {
 		}
 	}
 
-	pub async fn serve_subscribe(subscribe: Subscribed, track: Option<serve::TrackReader>) -> Result<(), SessionError> {
+	pub async fn serve_subscribe(subscribe: Subscribed, track: Option<serve::TrackReader>, sender: mpsc::Sender::<StreamClosedEvent>) -> Result<(), SessionError> {
 		match track {
-			Some(track) => subscribe.serve(track).await?,
+			Some(track) => subscribe.serve(track, sender).await?,
 			None => subscribe.close(ServeError::NotFound)?,
 		};
 
