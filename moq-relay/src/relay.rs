@@ -3,6 +3,7 @@ use std::{sync::Arc, time};
 use anyhow::Context;
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
+use quinn::{congestion, VarInt};
 
 use crate::{
 	Config, Connection, Locals, LocalsConsumer, LocalsProducer, Remotes, RemotesConsumer, RemotesProducer, Tls,
@@ -28,8 +29,13 @@ impl Relay {
 		let mut transport_config = quinn::TransportConfig::default();
 		transport_config.max_idle_timeout(Some(time::Duration::from_secs(10).try_into().unwrap()));
 		transport_config.keep_alive_interval(Some(time::Duration::from_secs(4))); // TODO make this smarter
-		transport_config.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
 		transport_config.mtu_discovery_config(None); // Disable MTU discovery
+		transport_config.max_concurrent_uni_streams(VarInt::from_u32(1000000));
+		transport_config.stream_receive_window(VarInt::from_u32(u32::MAX));
+		transport_config.send_window(u64::MAX);
+		transport_config.receive_window(VarInt::from_u32(u32::MAX));
+		transport_config.packet_threshold(1000);
+		transport_config.persistent_congestion_threshold(1000);
 		let transport_config = Arc::new(transport_config);
 
 		let mut client_config = quinn::ClientConfig::new(Arc::new(client_config));

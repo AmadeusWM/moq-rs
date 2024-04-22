@@ -350,8 +350,8 @@ impl Subscribed {
 			.ok_or(ServeError::Done)?
 			.update_max(object.group_id, object.object_id)?;
 
-		let mut stream = publisher.open_uni().await?;
-
+				let mut stream = publisher.open_uni().await?;
+		
 		// TODO figure out u32 vs u64 priority
 		stream.set_priority(object.priority as i32);
 
