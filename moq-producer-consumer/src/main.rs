@@ -7,7 +7,7 @@ mod cli;
 mod producer_consumer;
 
 use moq_native::quic;
-use moq_transport::serve;
+use moq_transport::serve::{self, GroupsReader, TrackReader};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,7 +42,7 @@ async fn run(session: web_transport::Session, config: cli::Config) -> anyhow::Re
 			.context("failed to create MoQ Transport session")?;
 
 		let (mut broadcast, _, broadcast_sub) = serve::Tracks {
-			namespace: config.namespace.clone()
+			namespace: config.namespace.clone(),
 		}
 		.produce();
 
@@ -54,23 +54,71 @@ async fn run(session: web_transport::Session, config: cli::Config) -> anyhow::Re
 			res = session.run() => res.context("session error")?,
 			res = producer.run_objects() => res.context("producer error")?,
 			res = publisher.announce(broadcast_sub) => res.context("failed to serve broadcast")?,
-		}
+		};
 	} else {
-		let (session, mut subscriber) = moq_transport::session::Subscriber::connect(session)
+		observe_participants(session, config).await?;
+	}
+	Ok(())
+}
+
+async fn observe_participants(session: web_transport::Session, config: cli::Config) -> anyhow::Result<()> {
+	let (session, mut subscriber) = moq_transport::session::Subscriber::connect(session)
+		.await
+		.context("failed to create MoQ Transport session")?;
+
+	let (prod, sub) = serve::Track::new(config.namespace, config.track).produce();
+
+	tokio::select! {
+		res = session.run() => res.context("session error")?,
+		res = run_participants(sub) => res.context("participant error")?,
+		res = subscriber.subscribe(prod) => res.context("subscribe closed")?,
+	}
+	Ok(())
+}
+
+async fn run_participants(reader: TrackReader) -> anyhow::Result<()> {
+	match reader.mode().await? {
+		serve::TrackReaderMode::Stream(_) => todo!(),
+		serve::TrackReaderMode::Groups(groups) => recv_groups(groups).await,
+		serve::TrackReaderMode::Objects(_) => todo!(),
+		serve::TrackReaderMode::Datagrams(_) => todo!(),
+	}
+}
+
+async fn recv_groups(mut groups: GroupsReader) -> anyhow::Result<()> {
+	while let Some(mut group) = groups.next().await? {
+		let base = group
+			.read_next()
 			.await
-			.context("failed to create MoQ Transport session")?;
+			.context("failed to get first object")?
+			.context("empty group")?;
 
-		let (prod, sub) = serve::Track::new(config.namespace, config.track).produce();
+		let base = String::from_utf8_lossy(&base);
 
-		let consumer = producer_consumer::Consumer::new(sub);
-
-		tokio::select! {
-			res = session.run() => res.context("session error")?,
-			res = consumer.run() => res.context("consumer error")?,
-			res = subscriber.subscribe(prod) => res.context("subscribe closed")?,
+		log::info!("base: {}", base);
+		while let Some(object) = group.read_next().await? {
+			let str = String::from_utf8_lossy(&object);
+			log::info!("str: {}", str);
 		}
 	}
 
+	Ok(())
+}
+
+async fn subscribe_on_participant(session: web_transport::Session, config: cli::Config) -> anyhow::Result<()> {
+	let (session, mut subscriber) = moq_transport::session::Subscriber::connect(session)
+		.await
+		.context("failed to create MoQ Transport session")?;
+
+	let (prod, sub) = serve::Track::new(config.namespace, config.track).produce();
+
+	let consumer = producer_consumer::Consumer::new(sub);
+
+	tokio::select! {
+		res = session.run() => res.context("session error")?,
+		res = consumer.run() => res.context("consumer error")?,
+		res = subscriber.subscribe(prod) => res.context("subscribe closed")?,
+	}
 	Ok(())
 }
 

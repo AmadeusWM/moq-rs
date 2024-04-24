@@ -60,7 +60,10 @@ impl Session {
 					});
 				},
 				_ = tasks.next(), if !tasks.is_empty() => {},
-				else => return Ok(()),
+				else => {
+					log::debug!("done publishing");
+					return Ok(())
+				}
 			};
 		}
 	}

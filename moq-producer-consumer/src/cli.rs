@@ -20,11 +20,11 @@ pub struct Config {
 	pub publish: bool,
 
 	/// The namespace of the producer track.
-	#[arg(long, default_value = "producer")]
+	#[arg(long, default_value = ".")]
 	pub namespace: String,
 
 	/// The name of the producer track.
-	#[arg(long, default_value = "xyz")]
+	#[arg(long, default_value = ".xyz.abc")]
 	pub track: String,
 }
 

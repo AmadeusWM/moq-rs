@@ -20,4 +20,4 @@ BIND="${BIND:-[::]:$PORT}"
 ARGS=""
 
 # Run the server and forward any arguments
-cargo run --bin moq-dir -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" $ARGS -- "$@"
+cargo run --bin moq-dir -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" $ARGS $@
