@@ -2,7 +2,7 @@ use clap::Parser;
 use std::{net, path};
 use url::Url;
 
-#[derive(Parser, Clone, Debug)]
+#[derive(Parser, Clone)]
 pub struct Config {
 	/// Listen for UDP packets on the given address.
 	#[arg(long, default_value = "[::]:0")]
@@ -12,18 +12,8 @@ pub struct Config {
 	#[arg(value_parser = moq_url)]
 	pub url: Url,
 
-	/// Use the TLS root CA at this path, encoded as PEM.
-	///
-	/// This value can be provided multiple times for multiple roots.
-	/// If this is empty, system roots will be used instead
-	#[arg(long)]
-	pub tls_root: Vec<path::PathBuf>,
-
-	/// Danger: Disable TLS certificate verification.
-	///
-	/// Fine for local development, but should be used in caution in production.
-	#[arg(long)]
-	pub tls_disable_verify: bool,
+	#[command(flatten)]
+	pub tls: moq_native::tls::Cli,
 
 	/// Publish the current time to the relay, otherwise only subscribe.
 	#[arg(long)]

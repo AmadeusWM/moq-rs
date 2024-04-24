@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 	let session = quic.client.connect(&config.url).await?;
 
 	if config.publish {
-		let (session, mut publisher) = Publisher::connect(session.into())
+		let (session, mut publisher) = Publisher::connect(session)
 			.await
 			.context("failed to create MoQ Transport session")?;
 

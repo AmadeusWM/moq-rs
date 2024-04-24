@@ -6,6 +6,7 @@ use clap::Parser;
 mod cli;
 mod producer_consumer;
 
+use moq_native::quic;
 use moq_transport::serve;
 
 #[tokio::main]
@@ -20,107 +21,53 @@ async fn main() -> anyhow::Result<()> {
 
 	let config = cli::Config::parse();
 
+	let tls = config.tls.load()?;
+
 	// Create a list of acceptable root certificates.
-	let mut roots = rustls::RootCertStore::empty();
-
-	if config.tls_root.is_empty() {
-		// Add the platform's native root certificates.
-		for cert in rustls_native_certs::load_native_certs().context("could not load platform certs")? {
-			roots
-				.add(&rustls::Certificate(cert.0))
-				.context("failed to add root cert")?;
-		}
-	} else {
-		// Add the specified root certificates.
-		for root in &config.tls_root {
-			let root = fs::File::open(root).context("failed to open root cert file")?;
-			let mut root = io::BufReader::new(root);
-
-			let root = rustls_pemfile::certs(&mut root).context("failed to read root cert")?;
-			anyhow::ensure!(root.len() == 1, "expected a single root cert");
-			let root = rustls::Certificate(root[0].to_owned());
-
-			roots.add(&root).context("failed to add root cert")?;
-		}
-	}
-
-	let mut tls_config = rustls::ClientConfig::builder()
-		.with_safe_defaults()
-		.with_root_certificates(roots)
-		.with_no_client_auth();
-
-	// Allow disabling TLS verification altogether.
-	if config.tls_disable_verify {
-		let noop = NoCertificateVerification {};
-		tls_config.dangerous().set_certificate_verifier(Arc::new(noop));
-	}
+	let quic = quic::Endpoint::new(quic::Config { bind: config.bind, tls })?;
 
 	log::info!("connecting to server: url={}", config.url);
 
-	match config.url.scheme() {
-		"https" => {
-			tls_config.alpn_protocols = vec![web_transport_quinn::ALPN.to_vec()]; // this one is important
-			let client_config = quinn::ClientConfig::new(Arc::new(tls_config));
+	let session = quic.client.connect(&config.url).await?;
 
-			let mut endpoint = quinn::Endpoint::client(config.bind)?;
-			endpoint.set_default_client_config(client_config);
-
-			let session = web_transport_quinn::connect(&endpoint, &config.url)
-				.await
-				.context("failed to create WebTransport session")?;
-
-			run(session, config).await
-		}
-		"moqt" => {
-			tls_config.alpn_protocols = vec![moq_transport::setup::ALPN.to_vec()]; // this one is important
-			let client_config = quinn::ClientConfig::new(Arc::new(tls_config));
-
-			let mut endpoint = quinn::Endpoint::client(config.bind)?;
-			endpoint.set_default_client_config(client_config);
-
-			let session = web_transport_quinn::connect(&endpoint, &config.url)
-				.await
-				.context("failed to create QUIC Transport session")?;
-
-			run(session, config).await
-		}
-		_ => anyhow::bail!("unsupported scheme: {}", config.url.scheme()),
-	}
+	log::info!("connecting to server: url={}", config.url);
+	run(session, config).await?;
+	Ok(())
 }
 
-async fn run(session: web_transport_quinn::Session, config: cli::Config) -> anyhow::Result<()> {
+async fn run(session: web_transport::Session, config: cli::Config) -> anyhow::Result<()> {
 	if config.publish {
-		let (session, mut publisher) = moq_transport::Publisher::connect(session.into())
+		let (session, mut publisher) = moq_transport::session::Publisher::connect(session)
 			.await
 			.context("failed to create MoQ Transport session")?;
 
-		let (mut broadcast, broadcast_sub) = serve::Broadcast {
-			namespace: config.namespace.clone(),
+		let (mut broadcast, _, broadcast_sub) = serve::Tracks {
+			namespace: config.namespace.clone()
 		}
 		.produce();
 
-		let track = broadcast.create_track(&config.track)?;
+		let track = broadcast.create(&config.track).unwrap();
+
 		let producer = producer_consumer::Producer::new(track);
 
 		tokio::select! {
 			res = session.run() => res.context("session error")?,
 			res = producer.run_objects() => res.context("producer error")?,
-			res = publisher.serve(broadcast_sub) => res.context("failed to serve broadcast")?,
+			res = publisher.announce(broadcast_sub) => res.context("failed to serve broadcast")?,
 		}
 	} else {
-		let (session, mut subscriber) = moq_transport::Subscriber::connect(session.into())
+		let (session, mut subscriber) = moq_transport::session::Subscriber::connect(session)
 			.await
 			.context("failed to create MoQ Transport session")?;
 
-		let (prod, sub) = serve::Track::new(&config.namespace, &config.track).produce();
-		let subscribe = subscriber.subscribe(prod).context("failed to subscribe to track")?;
+		let (prod, sub) = serve::Track::new(config.namespace, config.track).produce();
 
 		let consumer = producer_consumer::Consumer::new(sub);
 
 		tokio::select! {
 			res = session.run() => res.context("session error")?,
 			res = consumer.run() => res.context("consumer error")?,
-			res = subscribe.closed() => res.context("subscribe closed")?,
+			res = subscriber.subscribe(prod) => res.context("subscribe closed")?,
 		}
 	}
 
