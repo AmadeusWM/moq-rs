@@ -12,11 +12,12 @@ export RUST_LOG="${RUST_LOG:-debug}"
 CERT="${CERT:-dev/localhost.crt}"
 KEY="${KEY:-dev/localhost.key}"
 
-# Default to listening on localhost:4443
-PORT="${PORT:-3333}"
+# Default to listening on localhost:4442
+PORT="${PORT:-4442}"
 BIND="${BIND:-[::]:$PORT}"
 
-echo "Publish URL: https://quic.video/publish/?server=localhost:$PORT"
+# A list of optional args
+ARGS=""
 
-# Run the relay and forward any arguments
-cargo run --bin moq-dir -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" $@
+# Run the server and forward any arguments
+cargo run --bin moq-dir -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" $ARGS -- "$@"
