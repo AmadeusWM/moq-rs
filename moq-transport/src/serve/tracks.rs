@@ -45,6 +45,7 @@ pub struct TracksState {
 }
 
 /// Publish new tracks for a broadcast by name.
+#[derive(Clone)]
 pub struct TracksWriter {
 	state: State<TracksState>,
 	pub info: Arc<Tracks>,

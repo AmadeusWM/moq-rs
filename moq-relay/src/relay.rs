@@ -16,7 +16,7 @@ pub struct RelayConfig {
 	pub tls: moq_native::tls::Config,
 
 	/// Forward all announcements to the (optional) URL.
-	pub announce: Option<Url>,
+	pub announce: Option<Vec<Url>>,
 
 	/// Connect to the HTTP moq-api at this URL.
 	pub api: Option<Url>,
@@ -28,7 +28,7 @@ pub struct RelayConfig {
 
 pub struct Relay {
 	quic: quic::Endpoint,
-	announce: Option<Url>,
+	announce: Option<Vec<Url>>,
 	locals: Locals,
 	api: Option<Api>,
 	remotes: Option<(RemotesProducer, RemotesConsumer)>,
@@ -76,32 +76,34 @@ impl Relay {
 			consumer
 		});
 
-		let forward = if let Some(url) = &self.announce {
-			log::info!("forwarding announces to {}", url);
-			let session = self
-				.quic
-				.client
-				.connect(url)
-				.await
-				.context("failed to establish forward connection")?;
-			let (session, publisher, subscriber) = moq_transport::session::Session::connect(session)
-				.await
-				.context("failed to establish forward session")?;
+		let forwards = if let Some(urls) = &self.announce {
+			log::info!("forwarding announces to {:?}", urls);
+			let mut forwards = vec![];
+			for url in urls {
+				let session = self
+					.quic
+					.client
+					.connect(url)
+					.await
+					.context("failed to establish forward connection")?;
+				let (session, publisher, subscriber) = moq_transport::session::Session::connect(session)
+					.await
+					.context("failed to establish forward session")?;
 
-			// Create a normal looking session, except we never forward or register announces.
-			let session = Session {
-				session,
-				producer: Some(Producer::new(publisher, self.locals.clone(), remotes.clone())),
-				consumer: Some(Consumer::new(subscriber, self.locals.clone(), None, None)),
-			};
+				// Create a normal looking session, except we never forward or register announces.
+				let session = Session {
+					session,
+					producer: Some(Producer::new(publisher, self.locals.clone(), remotes.clone())),
+					consumer: Some(Consumer::new(subscriber, self.locals.clone(), None, forwards.clone())),
+				};
 
-			let forward = session.producer.clone();
-
-			tasks.push(async move { session.run().await.context("forwarding failed") }.boxed());
-
-			forward
+				let forward = session.producer.clone().unwrap();
+				tasks.push(async move { session.run().await.context("forwarding failed") }.boxed());
+				forwards.push(forward);
+			}
+			forwards
 		} else {
-			None
+			vec![]
 		};
 
 		let mut server = self.quic.server.context("missing TLS certificate")?;
@@ -114,7 +116,7 @@ impl Relay {
 
 					let locals = self.locals.clone();
 					let remotes = remotes.clone();
-					let forward = forward.clone();
+					let forwards = forwards.clone();
 					let api = self.api.clone();
 
 					tasks.push(async move {
@@ -129,7 +131,7 @@ impl Relay {
 						let session = Session {
 							session,
 							producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes)),
-							consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forward)),
+							consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forwards)),
 						};
 
 						if let Err(err) = session.run().await {

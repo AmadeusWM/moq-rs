@@ -35,7 +35,7 @@ pub struct Cli {
 	/// Forward all announces to the provided server for authentication/routing.
 	/// If not provided, the relay accepts every unique announce.
 	#[arg(long)]
-	pub announce: Option<Url>,
+	pub announce: Option<Vec<Url>>,
 
 	/// The URL of the moq-api server in order to run a cluster.
 	/// Must be used in conjunction with --node to advertise the origin

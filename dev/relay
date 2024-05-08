@@ -25,6 +25,10 @@ if [ -n "${ANNOUNCE-}" ]; then
 	ARGS="$ARGS --announce $ANNOUNCE"
 fi
 
+if [ -n "${ANNOUNCE2-}" ]; then
+	ARGS="$ARGS --announce $ANNOUNCE2"
+fi
+
 # Provide our node URL when registering origins.
 if [ -n "${HOST-}" ]; then
 	ARGS="$ARGS --host $HOST"
@@ -33,4 +37,4 @@ fi
 echo "Publish URL: https://quic.video/publish/?server=localhost:$PORT"
 
 # Run the relay and forward any arguments
-cargo run --bin moq-relay -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" $ARGS -- "$@"
+cargo run --bin moq-relay -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" --tls-disable-verify $ARGS -- "$@"

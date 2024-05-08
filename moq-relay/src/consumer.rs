@@ -12,16 +12,16 @@ pub struct Consumer {
 	remote: Subscriber,
 	locals: Locals,
 	api: Option<Api>,
-	forward: Option<Producer>, // Forward all announcements to this subscriber
+	forwards: Vec<Producer>, // Forward all announcements to this subscriber
 }
 
 impl Consumer {
-	pub fn new(remote: Subscriber, locals: Locals, api: Option<Api>, forward: Option<Producer>) -> Self {
+	pub fn new(remote: Subscriber, locals: Locals, api: Option<Api>, forwards: Vec<Producer>) -> Self {
 		Self {
 			remote,
 			locals,
 			api,
-			forward,
+			forwards,
 		}
 	}
 
@@ -51,7 +51,7 @@ impl Consumer {
 	async fn serve(mut self, mut announce: Announced) -> Result<(), anyhow::Error> {
 		let mut tasks = FuturesUnordered::new();
 
-		let (_, mut request, reader) = Tracks::new(announce.namespace.to_string()).produce();
+		let (writer, mut request, reader) = Tracks::new(announce.namespace.to_string()).produce();
 
 		if let Some(api) = self.api.as_ref() {
 			let mut refresh = api.set_origin(reader.namespace.clone()).await?;
@@ -63,17 +63,23 @@ impl Consumer {
 
 		announce.ok()?;
 
-		if let Some(mut forward) = self.forward {
+		for mut forward in self.forwards {
+			let reader = reader.clone();
 			tasks.push(
 				async move {
 					log::info!("forwarding announce: {:?}", reader.info);
-					forward.announce(reader).await.context("failed forwarding announce")
+					let res = forward.announce(reader).await.context("failed forwarding announce");
+					if let Err(err) = res {
+						log::warn!("error in forwarding announce: {}", err);
+					}
+					Ok(())
 				}
 				.boxed(),
 			);
 		}
 
 		loop {
+			let mut writer = writer.clone();
 			tokio::select! {
 				// If the announce is closed, return the error
 				Err(err) = announce.closed() => return Err(err.into()),
@@ -89,6 +95,8 @@ impl Consumer {
 						if let Err(err) = remote.subscribe(track).await {
 							log::warn!("failed forwarding subscribe: {:?}, error: {}", info, err)
 						}
+
+						writer.remove(&info.name);
 
 						Ok(())
 					}.boxed());
